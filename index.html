@@ -103,7 +103,7 @@ body.light .muted{ color:var(--muted); }
 <body>
 <div class="wrap">
   <header>
-    <h1>บันทึกอารมณ์รายวัน v1 </h1>
+    <h1>บันทึกอารมณ์รายวัน</h1>
     <div class="row">
      <button class="btn" id="themeToggle" title="สลับธีม">🌙</button>
      <span class="pill" id="countBadge">รวม 0 รายการ</span>
@@ -251,34 +251,46 @@ saveBtn.onclick=()=>{
   const note = noteEl.value.trim();
   if(!selectedEmoji && !note){ alert("กรุณาเลือกอิโมจิหรือเขียนบันทึกก่อน"); return; }
 
+  // ✅ เก็บ emoji ก่อนรีเซ็ต
+  const chosenEmoji = selectedEmoji;
+
+  // บันทึกลง localStorage
   const data = loadData();
   const exist = data.find(d=>d.date===date);
-  if(exist){ exist.emoji=selectedEmoji; exist.note=note; }
-  else{ data.push({date,emoji:selectedEmoji,note}); }
-
+  if(exist){ exist.emoji=chosenEmoji; exist.note=note; }
+  else{ data.push({date,emoji:chosenEmoji,note}); }
   localStorage.setItem("moodLogs",JSON.stringify(data));
+
+  // เอฟเฟกต์
+  const rect = saveBtn.getBoundingClientRect();
+  const cx = rect.left + rect.width/2;
+  const cy = rect.top;
+  heartBurst(cx, cy);
+  sparkle(cx, cy);
+
+  // ✅ ส่งขึ้นชีตด้วย chosenEmoji (ไม่ใช่ selectedEmoji ที่รีเซ็ตแล้ว)
+  sendToSheet({
+    date,
+    emoji: chosenEmoji || "",
+    note,
+    userAgent: navigator.userAgent
+  })
+  .then(res=>{
+    console.log("Sheet response:", res);
+    if(!res?.ok) alert("ส่งขึ้นชีตไม่สำเร็จ: " + JSON.stringify(res));
+  })
+  .catch(err=>{
+    console.error("ส่งไม่สำเร็จ:", err);
+    alert("ส่งไม่สำเร็จ: ดู Console เพิ่มเติม");
+  })
+  .finally(()=>{ renderList(); });
+
+  // รีเซ็ต UI หลังสั่งส่ง
   noteEl.value="";
   selectedEmoji=null;
   document.querySelectorAll(".emoji-btn").forEach(x=>x.classList.remove("selected"));
-
-  const rect = saveBtn.getBoundingClientRect();
-  // ใช้พิกัดแบบ viewport เพราะ element เอฟเฟกต์เป็น position: fixed
-  const cx = rect.left + rect.width/2;
-  const cy = rect.top;
-
-  heartBurst(cx, cy);
-  sparkle(cx, cy); // ✨
-  sendToSheet({
-    date,
-    emoji: selectedEmoji || "",
-    note,
-    userAgent: navigator.userAgent
-  }).then(r=>{
-    if(r.ok) console.log("ส่งข้อมูลขึ้นชีตสำเร็จ ✅");
-    else console.warn("ส่งไม่สำเร็จ", r);
-  });
-  renderList();
 };
+
 
 clearBtn.onclick=()=>{
   const data = loadData().filter(d=>d.date!==dateInput.value);
