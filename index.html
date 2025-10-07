@@ -233,17 +233,35 @@ const SHEET_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyJ-ZlgDV3eoIt
 
 async function sendToSheet(payload){
   try {
+    // 1) พยายามยิงแบบ simple request (ไม่มี headers -> ไม่ preflight)
     const res = await fetch(SHEET_WEBAPP_URL, {
       method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload) // จะส่งเป็น text/plain โดย default
     });
-    return res.json();
-  } catch(err){
-    console.error("ส่งไม่สำเร็จ:", err);
-    return {ok:false};
+
+    // พยายามอ่านผลลัพธ์ (ถ้า CORS ไม่เอื้อ อาจอ่านไม่ได้แต่ request ก็ส่งไปแล้ว)
+    const text = await res.text();
+    console.log("HTTP", res.status, text);
+    try { return JSON.parse(text); } catch { return { ok: res.ok, raw: text }; }
+
+  } catch (err1) {
+    console.warn("simple POST failed, trying no-cors…", err1);
+
+    // 2) fallback: no-cors (อ่านผลลัพธ์ไม่ได้ แต่ GAS จะได้รับและ appendRow ได้)
+    try {
+      await fetch(SHEET_WEBAPP_URL, {
+        method: "POST",
+        mode: "no-cors",
+        body: JSON.stringify(payload)
+      });
+      return { ok: true, note: "sent with no-cors (response opaque)" };
+    } catch (err2) {
+      console.error("ส่งไม่สำเร็จ:", err2);
+      return { ok:false, error:String(err2) };
+    }
   }
 }
+
 
 
 saveBtn.onclick=()=>{
@@ -277,7 +295,7 @@ saveBtn.onclick=()=>{
   })
   .then(res=>{
     console.log("Sheet response:", res);
-    if(!res?.ok) alert("ส่งขึ้นชีตไม่สำเร็จ: " + JSON.stringify(res));
+    if(!res?.ok) alert("ส่งขึ้นฟ้าไม่สำเร็จ: " + JSON.stringify(res));
   })
   .catch(err=>{
     console.error("ส่งไม่สำเร็จ:", err);
